@@ -1,0 +1,13 @@
+Job Title: Data Scientist
+Location: Hybrid – New York, NY (3 days onsite per week) Employment Type: Full-time Department: Data & Analytics
+
+About the Role We are seeking a highly motivated Data Scientist to join our growing Analytics team. You’ll work closely with data engineers, product managers, and business stakeholders to design, build, and deploy data-driven solutions that power key decisions across the organization.
+Your work will combine statistical modeling, machine learning, and experimentation to uncover actionable insights and improve product and business outcomes.
+
+Key Responsibilities - Develop, validate, and deploy predictive and prescriptive models using Python or R. - Analyze large, complex datasets to identify trends, patterns, and opportunities for optimization. - Collaborate with cross-functional teams to define key metrics and evaluate business strategies through A/B testing and causal inference. - Build automated pipelines for data collection, cleaning, and feature engineering. - Present findings and recommendations to technical and non-technical stakeholders through clear visualizations and storytelling. - Stay current with new tools, techniques, and best practices in machine learning, data science, and AI.
+
+Required Qualifications - Bachelor’s or Master’s degree in Computer Science, Statistics, Applied Mathematics, or a related field. - 2–5 years of experience in a data science or machine learning role. - Proficiency in Python (NumPy, pandas, scikit-learn, PyTorch or TensorFlow). - Experience with SQL and data querying in large-scale data environments (Snowflake, BigQuery, Redshift, etc.). - Strong understanding of statistics, hypothesis testing, and experimental design. - Experience with data visualization tools such as Tableau, Power BI, or Plotly.
+
+Preferred Qualifications - Experience with cloud platforms (AWS, GCP, Azure) and containerization (Docker). - Background in NLP, recommender systems, or time series forecasting. - Experience deploying machine learning models in production. - Familiarity with MLOps and version control (Git, MLflow).
+
+Why Join Us - Competitive salary and performance-based bonuses. - Comprehensive health, dental, and vision coverage. - 401(k) with company match. - Annual learning stipend and access to online training resources. - Opportunity to work on impactful projects in a collaborative, data-driven environment.
