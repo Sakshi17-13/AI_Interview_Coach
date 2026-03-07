@@ -1,63 +1,59 @@
 # AI_Interview_Coach
-An LLM-powered, multimodal AI interview coach that analyzes resumes and job descriptions to conduct personalized mock interviews using speech-to-text and text-to-speech
+An **LLM-powered, multimodal AI interview coach** that analyzes resumes and job descriptions to conduct personalized mock interviews using **speech-to-text and text-to-speech technologies**.
+
 
 ---
 
 ## 📌 Project Overview
 
-Interview preparation is a critical but often stressful step in landing a job. Most traditional mock interview tools are generic and do not adapt to a candidate’s background or the specific job role.
+Interview preparation is one of the most important steps in landing a job, but it can often feel stressful and uncertain. Most traditional mock interview tools are generic and do not adapt to a candidate’s background or the specific job role.
 
-The **AI Interview Coach** is an intelligent system that:
-- Reads and understands a candidate’s resume
-- Analyzes the job description for required skills and expectations
-- Conducts a personalized, adaptive mock interview
-- Interacts using voice (audio questions and spoken answers)
-- Evaluates the candidate’s performance and provides feedback
+**AI Interview Coach** solves this problem by providing a personalized AI-driven interview experience. The system reads the candidate's resume, analyzes the job description, and dynamically generates interview questions tailored to the candidate’s experience and the target role.
 
-This project demonstrates how Large Language Models (LLMs) and speech technologies can be integrated into a real-world, user-facing AI application.
+The platform also supports **voice interaction**, allowing users to listen to interview questions and respond verbally, creating a realistic interview simulation environment.
+
+This project demonstrates how **Large Language Models (LLMs), speech processing, and web interfaces** can be integrated to build intelligent career preparation tools.
 
 ---
 
 ## ✨ Key Features
 
-- 📄 Resume PDF parsing and summarization  
-- 📋 Job description analysis using LLM reasoning  
-- 🤖 Personalized interview question generation  
-- 🔁 Adaptive follow-up questioning based on previous answers  
-- 🔊 Text-to-Speech interviewer voice (gTTS)  
-- 🎙️ Speech-to-Text transcription using Faster Whisper  
-- 📊 Automated interview performance evaluation  
-- 🌐 Interactive Gradio-based web interface  
+- 📄 **Resume Analysis** – Extracts and summarizes candidate information from PDF resumes  
+- 📋 **Job Description Understanding** – Identifies key requirements and expectations for the role  
+- 🤖 **Adaptive Interview Questions** – Generates dynamic interview questions based on candidate responses  
+- 🔁 **Follow-up Questioning** – Adjusts questions based on previous answers  
+- 🔊 **Text-to-Speech** – Converts interview questions into natural audio using gTTS  
+- 🎙️ **Speech-to-Text** – Transcribes candidate responses using Faster Whisper  
+- 📊 **Performance Evaluation** – Provides AI-generated feedback on interview performance  
+- 🌐 **Interactive Web Interface** – Built using Gradio for real-time interaction
 
 ---
 
 ## 🧠 System Architecture
 
-The system is designed as a **multi-agent AI pipeline**:
+The system is designed as a **multi-agent AI pipeline** consisting of the following components:
 
-1. **Resume Analyst Agent**  
-   Extracts and summarizes key information from the resume PDF.
+### 1️⃣ Resume Analyst Agent
+Extracts and summarizes key information from the candidate's resume.
 
-2. **Job Description Expert Agent**  
-   Identifies required skills, responsibilities, and expectations from the job description.
+### 2️⃣ Job Description Expert Agent
+Analyzes the job description to identify required skills and expectations.
 
-3. **Interview Strategy Agent**  
-   Decides whether to ask a new topic or a follow-up question based on interview history.
+### 3️⃣ Interview Strategy Agent
+Determines the next question strategy based on previous answers.
 
-4. **Interviewer Agent**  
-   Generates natural, role-specific interview questions.
+### 4️⃣ Interviewer Agent
+Generates realistic interview questions tailored to the candidate profile.
 
-5. **Evaluation Agent**  
-   Assesses the candidate’s responses and provides feedback on skills and personality fit.
+### 5️⃣ Evaluation Agent
+Evaluates candidate responses and provides feedback.
 
-6. **Speech-to-Text Module**  
-   Converts user’s spoken answers into text using Faster Whisper.
+### 6️⃣ Speech Processing Modules
+- **Speech-to-Text:** Faster Whisper  
+- **Text-to-Speech:** gTTS
 
-7. **Text-to-Speech Module**  
-   Converts interviewer questions into natural-sounding audio.
-
-8. **Gradio Web Interface**  
-   Integrates all components into an interactive user experience.
+### 7️⃣ Web Interface
+A **Gradio-based interactive dashboard** that integrates all modules.
 
 ---
 
@@ -88,13 +84,15 @@ The system is designed as a **multi-agent AI pipeline**:
 
 ## 🎯 Use Cases
 1.Interview preparation for students and job seekers
-2.Personalized mock interviews for specific job roles
-3.AI-assisted communication and confidence practice
-4.Demonstration of LLM-based multimodal systems
+2.Personalized mock interviews tailored to specific roles
+3.AI-assisted communication practice
+4.Demonstration of multimodal AI systems combining LLMs and speech technologies
 
 ## 📚 Educational Note
 This project is developed for academic and learning purposes.
-Large Language Models are controlled using structured prompt design, which acts as a rule-based instruction layer to guide intelligent behavior. The focus of the project is on system integration, workflow design, and practical AI application, not on model training.
+Large Language Models are controlled using structured prompt engineering, which acts as an instruction layer guiding the behavior of the AI system.
+
+The project focuses on AI system integration, conversational workflows, and practical applications of generative AI, rather than training new models.
 
 ## 🔮 Future Enhancements
 1.Confidence and sentiment analysis of answers
