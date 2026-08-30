@@ -4,3 +4,4 @@ faster-whisper==1.2.1
 PyPDF2==3.0.1
 gradio==5.49.1
 pyarrow==22.0.0
+pydantic>=2.11,<3.0

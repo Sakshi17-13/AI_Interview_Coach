@@ -9,6 +9,8 @@ import PyPDF2
 
 import gradio as gr
 
+from ai.llm_client import configure_structured_client
+
 # Global variable of the system: track the chat histories, number of interview questions, 
 # the resume and job summary.
 chat_histories = {}
@@ -37,6 +39,9 @@ llm_base = ModelInference(
     project_id=project_id,
     params=params,
 )
+
+# The AI foundation reuses this exact client; it does not initialise a second model.
+configure_structured_client(llm_base)
 
 def Resume_Analyst(resume):
     prompt = f"""
