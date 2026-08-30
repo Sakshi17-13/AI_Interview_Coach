@@ -20,23 +20,33 @@ from application_controller import (
     submit_application_answer,
 )
 from interview_app_adapter import InterviewApplicationSession, create_interview_session
-
-
-project_id = "skills-network"
-credentials = Credentials(url="https://us-south.ml.cloud.ibm.com")
-sample_params = TextChatParameters.get_sample_params()
-sample_params["max_tokens"] = int(1e5)
-sample_params["response_format"] = None
-params = TextChatParameters(**sample_params)
-
-# This is the application's one existing watsonx ModelInference instance.
-llm_base = ModelInference(
-    model_id="meta-llama/llama-3-3-70b-instruct",
-    credentials=credentials,
-    project_id=project_id,
-    params=params,
+from watsonx_configuration import (
+    CONFIGURATION_REQUIRED_MESSAGE,
+    WatsonxConfiguration,
+    configuration_required_ui_message,
+    initialize_watsonx_from_environment,
 )
-configure_structured_client(llm_base)
+
+
+def _create_watsonx_parameters() -> TextChatParameters:
+    sample_params = TextChatParameters.get_sample_params()
+    sample_params["max_tokens"] = int(1e5)
+    sample_params["response_format"] = None
+    return TextChatParameters(**sample_params)
+
+
+# Construct the application's one model only if all environment configuration is present.
+watsonx_configuration: WatsonxConfiguration = initialize_watsonx_from_environment(
+    credentials_factory=Credentials,
+    parameters_factory=_create_watsonx_parameters,
+    model_factory=ModelInference,
+    configure_client=configure_structured_client,
+)
+llm_base = watsonx_configuration.model
+
+
+def _configuration_error() -> str | None:
+    return configuration_required_ui_message(watsonx_configuration)
 
 
 def extract_text_from_pdf(pdf_file_path: str | object) -> str:
@@ -92,6 +102,9 @@ def start_interview(
 ) -> tuple[str, str | None, None, str, str, InterviewApplicationSession | None]:
     """Build profiles/matches and start one new engine-backed Gradio session."""
 
+    error = _configuration_error()
+    if error:
+        return "", None, None, error, "Start Interview", None
     update = start_application_interview(
         resume_path,
         job_description,
@@ -111,6 +124,9 @@ def submit_answer(
 ) -> tuple[str, str | None, None, str, str, InterviewApplicationSession | None]:
     """Transcribe one answer and advance only through the session-local engine."""
 
+    error = _configuration_error()
+    if error:
+        return "", None, None, error, "Start Interview", None
     update = submit_application_answer(
         session,
         answer_audio_path,
@@ -124,6 +140,9 @@ def submit_answer(
 def end_interview(
     session: InterviewApplicationSession | None,
 ) -> tuple[str, str | None, None, str, str, InterviewApplicationSession | None]:
+    error = _configuration_error()
+    if error:
+        return "", None, None, error, "Start Interview", None
     update = end_application_interview(session, format_report=_format_report)
     return update.question_text, update.question_audio_path, None, update.status, update.submit_label, update.session
 
@@ -131,6 +150,8 @@ def end_interview(
 with gr.Blocks() as demo:
     gr.Markdown("# Personalized Interview Coach")
     gr.Markdown("## Upload your PDF resume/CV and paste the job description.")
+    if not watsonx_configuration.is_ready:
+        gr.Markdown(f"⚠️ **configuration_required** — {CONFIGURATION_REQUIRED_MESSAGE}")
     session_state = gr.State(value=None)
     with gr.Row():
         resume_input = gr.File(label="Upload Resume (PDF)", type="filepath")
