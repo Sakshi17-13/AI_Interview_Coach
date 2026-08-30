@@ -222,6 +222,48 @@ def answer_assessment_messages(
     ]
 
 
+def final_report_qualitative_messages(
+    role_context: dict[str, Any],
+    competency_results: list[dict[str, Any]],
+    dimension_results: list[dict[str, Any]],
+    assessment_evidence: list[dict[str, Any]],
+    interview_statistics: dict[str, Any],
+    skill_match_context: dict[str, Any],
+    schema: dict[str, Any],
+) -> list[dict[str, str]]:
+    """Request qualitative feedback without delegating report metrics to the LLM."""
+
+    return [
+        {
+            "role": "system",
+            "content": (
+                "Write only concise, evidence-grounded qualitative interview feedback as JSON matching "
+                "the supplied schema. Do not return or alter scores, competency IDs, weights, rankings, "
+                "or hidden reasoning. Use only supplied assessment evidence, assessment strengths/gaps, role "
+                "requirements, and skill-match context. Assessment evidence comes only from candidate answer "
+                "transcripts; do not treat resume/profile context as interview-answer evidence. Never invent "
+                "candidate statements, skills, experience, projects, technologies, or achievements. Do not use "
+                "internal-planning language. Each non-empty feedback finding must include one or more evidence "
+                "objects copied exactly from the supplied validated answer evidence, including question_id. "
+                "Recommendations may describe what to improve, but factual claims about what the candidate did "
+                "or demonstrated must be supported by that finding's cited answer evidence."
+            ),
+        },
+        {
+            "role": "user",
+            "content": (
+                f"JSON Schema:\n{_schema_text(schema)}\n\n"
+                f"Role context:\n{json.dumps(role_context, indent=2)}\n\n"
+                f"Competency results:\n{json.dumps(competency_results, indent=2)}\n\n"
+                f"Dimension results:\n{json.dumps(dimension_results, indent=2)}\n\n"
+                f"Validated answer evidence:\n{json.dumps(assessment_evidence, indent=2)}\n\n"
+                f"Interview statistics:\n{json.dumps(interview_statistics, indent=2)}\n\n"
+                f"Resume/job skill-match context (not answer evidence):\n{json.dumps(skill_match_context, indent=2)}"
+            ),
+        },
+    ]
+
+
 def json_repair_messages(
     invalid_output: str, schema: dict[str, Any], error: str
 ) -> list[dict[str, str]]:

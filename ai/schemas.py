@@ -379,7 +379,9 @@ class AnswerAssessment(SchemaModel):
 class InterviewCoverage(SchemaModel):
     competency_id: str = Field(min_length=1)
     questions_asked: int = Field(default=0, ge=0)
+    follow_up_questions: int = Field(default=0, ge=0)
     last_score: float | None = Field(default=None, ge=0, le=5)
+    average_score: float | None = Field(default=None, ge=0, le=5)
     coverage_status: Literal["not_covered", "partial", "covered"] = "not_covered"
 
 
@@ -426,4 +428,143 @@ class InterviewPlanState(SchemaModel):
             raise ValueError("follow_up_count must equal planned follow-up questions.")
         if self.follow_up_count > self.max_follow_ups:
             raise ValueError("follow_up_count cannot exceed max_follow_ups.")
+        return self
+
+
+class InterviewAnswerRecord(BaseModel):
+    """A session-local transcript preserved without whitespace alteration."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=False)
+
+    question_id: str = Field(min_length=1)
+    transcript: str
+    assessment: AnswerAssessment
+
+
+class InterviewSessionState(SchemaModel):
+    """Complete state for one independently usable adaptive interview session."""
+
+    session_id: str = Field(min_length=1)
+    status: Literal["active", "completed"] = "active"
+    candidate_profile: CandidateProfile
+    role_profile: RoleProfile
+    skill_match_report: SkillMatchReport
+    plan_state: InterviewPlanState
+    current_question: InterviewQuestion | None = None
+    generated_questions: list[InterviewQuestion] = Field(default_factory=list)
+    answer_history: list[InterviewAnswerRecord] = Field(default_factory=list)
+    pending_answer_signal: PreviousAnswerSignal | None = None
+    remaining_questions: int = Field(ge=0)
+
+    @model_validator(mode="after")
+    def validate_session_consistency(self) -> "InterviewSessionState":
+        if len(self.generated_questions) != self.plan_state.questions_generated:
+            raise ValueError("Generated questions must match the planner question count.")
+        if self.remaining_questions != self.plan_state.target_question_count - self.plan_state.questions_generated:
+            raise ValueError("remaining_questions must match the planner state.")
+        if self.status == "completed" and self.current_question is not None:
+            raise ValueError("Completed interviews cannot have a current question.")
+        if self.current_question is not None and self.current_question.question_id not in {
+            question.question_id for question in self.generated_questions
+        }:
+            raise ValueError("Current question must be present in generated_questions.")
+        return self
+
+
+class AnswerSubmissionResult(SchemaModel):
+    assessment: AnswerAssessment
+    next_question: InterviewQuestion | None = None
+    state: InterviewSessionState
+
+
+class ReportEvidence(SchemaModel):
+    """Assessment evidence retained with its interview-question association."""
+
+    question_id: str = Field(min_length=1)
+    excerpt: str = Field(min_length=1)
+    source: Literal["answer"] = "answer"
+
+
+class CompetencyResult(SchemaModel):
+    """Deterministic interview performance for one competency actually assessed."""
+
+    competency_id: str = Field(min_length=1)
+    competency_name: str = Field(min_length=1)
+    requirement_level: Literal["required", "preferred"]
+    competency_weight: float = Field(gt=0, le=5)
+    interview_score: float = Field(ge=0, le=100)
+    question_count: int = Field(ge=0)
+    follow_up_count: int = Field(ge=0)
+    coverage_status: Literal["not_covered", "partial", "covered"]
+    strengths: list[str] = Field(default_factory=list)
+    weaknesses: list[str] = Field(default_factory=list)
+    evidence: list[ReportEvidence] = Field(default_factory=list)
+    improvement_actions: list[str] = Field(default_factory=list)
+
+
+class DimensionResult(SchemaModel):
+    """A deterministic aggregate for one answer-assessment dimension."""
+
+    dimension: Literal["technical_accuracy", "relevance", "specificity", "communication"]
+    score: float = Field(ge=0, le=5)
+    evidence: list[ReportEvidence] = Field(default_factory=list)
+    strengths: list[str] = Field(default_factory=list)
+    weaknesses: list[str] = Field(default_factory=list)
+
+
+class InterviewStatistics(SchemaModel):
+    total_questions: int = Field(ge=0)
+    answered_questions: int = Field(ge=0)
+    follow_up_questions: int = Field(ge=0)
+    competencies_assessed: int = Field(ge=0)
+    competencies_sufficiently_covered: int = Field(ge=0)
+
+
+class QualitativeFinding(SchemaModel):
+    """LLM-written feedback tied to evidence retained from candidate answers."""
+
+    text: str = Field(min_length=1)
+    evidence: list[ReportEvidence] = Field(min_length=1)
+
+
+class QualitativeReportContent(SchemaModel):
+    """The only qualitative fields the final-report LLM may provide."""
+
+    strongest_areas: list[QualitativeFinding] = Field(default_factory=list)
+    weakest_areas: list[QualitativeFinding] = Field(default_factory=list)
+    communication_feedback: list[QualitativeFinding] = Field(default_factory=list)
+    technical_feedback: list[QualitativeFinding] = Field(default_factory=list)
+    improvement_recommendations: list[QualitativeFinding] = Field(default_factory=list)
+    next_steps: list[QualitativeFinding] = Field(default_factory=list)
+
+
+class FinalInterviewReport(SchemaModel):
+    """Evidence-grounded final evaluation assembled from a completed or partial session."""
+
+    status: Literal["completed", "incomplete"]
+    overall_score: float = Field(ge=0, le=100)
+    job_fit_score: float = Field(ge=0, le=100)
+    recommendation: Literal["strong_match", "good_match", "developing_match", "weak_match"]
+    competency_results: list[CompetencyResult] = Field(default_factory=list)
+    dimension_results: list[DimensionResult] = Field(default_factory=list)
+    strongest_areas: list[str] = Field(default_factory=list)
+    weakest_areas: list[str] = Field(default_factory=list)
+    communication_feedback: list[str] = Field(default_factory=list)
+    technical_feedback: list[str] = Field(default_factory=list)
+    improvement_recommendations: list[str] = Field(default_factory=list)
+    next_steps: list[str] = Field(default_factory=list)
+    interview_statistics: InterviewStatistics
+
+    @model_validator(mode="after")
+    def validate_final_report_results(self) -> "FinalInterviewReport":
+        competency_ids = [result.competency_id for result in self.competency_results]
+        if len(competency_ids) != len(set(competency_ids)):
+            raise ValueError("Competency results may contain each competency only once.")
+        dimensions = [result.dimension for result in self.dimension_results]
+        if len(dimensions) != len(set(dimensions)):
+            raise ValueError("Dimension results may contain each dimension only once.")
+        if self.interview_statistics.competencies_assessed != len(self.competency_results):
+            raise ValueError("competencies_assessed must equal competency_results length.")
+        if self.interview_statistics.competencies_sufficiently_covered > self.interview_statistics.competencies_assessed:
+            raise ValueError("Sufficiently covered competencies cannot exceed assessed competencies.")
         return self

@@ -121,7 +121,10 @@ class InterviewPlanner:
         return plan, self._append_plan(state, plan)
 
     def record_coverage(
-        self, state: InterviewPlanState, signal: PreviousAnswerSignal
+        self,
+        state: InterviewPlanState,
+        signal: PreviousAnswerSignal,
+        was_follow_up: bool = False,
     ) -> InterviewPlanState:
         """Update interview-only coverage from a later assessment without changing resume matching."""
 
@@ -133,11 +136,15 @@ class InterviewPlanner:
                 continue
             found = True
             status = "covered" if signal.score >= 4 else "partial"
+            previous_total = (coverage.average_score or 0) * coverage.questions_asked
+            questions_asked = coverage.questions_asked + 1
             coverage_items.append(
                 coverage.model_copy(
                     update={
-                        "questions_asked": coverage.questions_asked + 1,
+                        "questions_asked": questions_asked,
+                        "follow_up_questions": coverage.follow_up_questions + int(was_follow_up),
                         "last_score": signal.score,
+                        "average_score": round((previous_total + signal.score) / questions_asked, 2),
                         "coverage_status": status,
                     }
                 )

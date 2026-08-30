@@ -1,323 +1,165 @@
-from ibm_watsonx_ai.foundation_models import ModelInference
-from ibm_watsonx_ai.foundation_models.schema import TextChatParameters
-from ibm_watsonx_ai import Credentials
+"""Gradio adapter for the session-local AI Interview Coach backend."""
 
-from gtts import gTTS
-from faster_whisper import WhisperModel
+from __future__ import annotations
 
-import PyPDF2
+import os
+import tempfile
 
 import gradio as gr
+import PyPDF2
+from faster_whisper import WhisperModel
+from gtts import gTTS
+from ibm_watsonx_ai import Credentials
+from ibm_watsonx_ai.foundation_models import ModelInference
+from ibm_watsonx_ai.foundation_models.schema import TextChatParameters
 
-from ai.llm_client import configure_structured_client
+from ai import build_candidate_profile, build_role_profile, configure_structured_client
+from application_controller import (
+    end_application_interview,
+    start_application_interview,
+    submit_application_answer,
+)
+from interview_app_adapter import InterviewApplicationSession, create_interview_session
 
-# Global variable of the system: track the chat histories, number of interview questions, 
-# the resume and job summary.
-chat_histories = {}
-interview_step = 0
-resume_summary = None
-job_summary = None
 
-project_id="skills-network"
-
-credentials = Credentials(
-                url = "https://us-south.ml.cloud.ibm.com"
-                )
-
-# Get sample parameter values
+project_id = "skills-network"
+credentials = Credentials(url="https://us-south.ml.cloud.ibm.com")
 sample_params = TextChatParameters.get_sample_params()
-sample_params['max_tokens'] = int(1e5)
-sample_params['response_format'] = None
-
-# Initialize the TextChatParameters object with the sample values
+sample_params["max_tokens"] = int(1e5)
+sample_params["response_format"] = None
 params = TextChatParameters(**sample_params)
 
-# Define LLM
+# This is the application's one existing watsonx ModelInference instance.
 llm_base = ModelInference(
-    model_id='meta-llama/llama-3-3-70b-instruct',
+    model_id="meta-llama/llama-3-3-70b-instruct",
     credentials=credentials,
     project_id=project_id,
     params=params,
 )
-
-# The AI foundation reuses this exact client; it does not initialise a second model.
 configure_structured_client(llm_base)
 
-def Resume_Analyst(resume):
-    prompt = f"""
-    Write a detailed REPORT, in several paragraphs, on the candidate. 
-    Three paragraphs: candidate's name and demographic info, key_skills, and the summary of the past experiences.
 
-    Resume:
-    {resume}
-    """
+def extract_text_from_pdf(pdf_file_path: str | object) -> str:
+    """Preserve the PyPDF2 extraction boundary while accepting Gradio filepath values."""
 
-    response = llm_base.chat(
-        messages=[
-                {"role":"system","content":"You are an HR expert in reviewing resumes."},
-                {"role": "user", "content":prompt}
-            ]
-        )
-    response_output = response['choices'][0]['message']['content']
-    return response_output
+    path = getattr(pdf_file_path, "name", pdf_file_path)
+    if not path:
+        raise ValueError("Please upload a resume PDF.")
+    reader = PyPDF2.PdfReader(path)
+    return "\n".join(page.extract_text() or "" for page in reader.pages).strip()
 
-def Job_Description_Expert(job_description):
-    prompt = f"""
-    Write a summary of the job description.
-    Identify the skills required and the experiences preferred.
 
-    Job Description:
-    {job_description}
-    """
+def text_to_speech_file(text_input: str) -> str:
+    """Render one question with gTTS and return its independent audio filepath."""
 
-    response = llm_base.chat(
-        messages=[
-                {"role":"system","content":"You are job expert."},
-                {"role": "user", "content":prompt}
-            ]
-        )
-    response_output = response['choices'][0]['message']['content']
-    return response_output
-
-def Interview_Question_Action(chat_histories, resume_summary, job_summary):
-    prompt = f"""
-    Based on the histories of the answers, the resume summary and the job summary,
-    pick one of the following two actions for the next question:
-    - (1) Ask about another past experience or skills on the resume.
-    - (2) Ask follow-up questions of the current topic.
-
-    Answer Histories:
-    {chat_histories}
-
-    Resume Summary:
-    {resume_summary}
-
-    Job Summary:
-    {job_summary}
-    """
-
-    response = llm_base.chat(
-        messages=[
-                {"role":"system","content":"You are job expert."},
-                {"role": "user", "content":prompt}
-            ]
-        )
-    response_output = response['choices'][0]['message']['content']
-    return response_output
-
-def Interviewer(resume_summary, job_summary, action=None, last=False):
-    if not last:
-        if action is not None:
-            prompt = f"""
-            Directly ask the question based on the given action instruction, 
-            resume summary and the job summary.
-
-            DO NOT GIVE ANY EXPLANATIONS WHY YOU ASK THE QUESTION.
-
-            Action:
-            {action}
-
-            Resume Summary:
-            {resume_summary}
-
-            Job Summary:
-            {job_summary}
-            """
-
-            response = llm_base.chat(
-            messages=[
-                    {"role":"system","content":"You are an expert interviewer."},
-                    {"role": "user", "content":prompt}
-                ]
-            )
-            response_output = response['choices'][0]['message']['content']
-        else:
-            response_output = "Tell me about yourself."
-    else:
-        prompt = f"""
-            The interview ends. Wrap up and express gratitude towards the candidate based on the resume.
-            Be CONCISE.
-
-            Resume Summary:
-            {resume_summary}
-            """
-
-        response = llm_base.chat(
-        messages=[
-                {"role":"system","content":"You are an expert interviewer."},
-                {"role": "user", "content":prompt}
-            ]
-        )
-        response_output = response['choices'][0]['message']['content']
-    
-    return response_output
-
-def Evaluator(chat_histories, job_summary):
-    prompt = f"""
-    Based on the histories of the answers and the job summary,
-    evaluate if the candidate is a good match, by personality and skills, 
-    and give reasons.
-
-    Answer Histories:
-    {chat_histories}
-
-    Job Summary:
-    {job_summary}
-    """
-
-    response = llm_base.chat(
-        messages=[
-                {"role":"system","content":"You are an expert to judge the performance of an interviewee."},
-                {"role": "user", "content":prompt}
-            ]
-        )
-    response_output = response['choices'][0]['message']['content']
-    return response_output
-
-# Function to read the pdf file (for resume)
-def extract_text_from_pdf(pdf_file_path):
-    reader = PyPDF2.PdfReader(pdf_file_path.name)
-    text = ""
-    for page in reader.pages:
-        page_text = page.extract_text()
-        if page_text:
-            text += page_text + "\n"
-    return text.strip()
-
-# Function to generate the audio file
-def text_to_speech_file(text_input):
-    # 1. Generate the audio and save it
-    audio_file_path = "temp_voice.mp3"
-    
-    # Using gTTS (as demonstrated earlier) to create the audio file
-    tts = gTTS(text=text_input, lang='en')
-    tts.save(audio_file_path)
-    
-    # 2. Return the file path
-    # Gradio will automatically display an audio player for this file.
+    if not text_input or not text_input.strip():
+        raise ValueError("Cannot create audio for an empty interview question.")
+    descriptor, audio_file_path = tempfile.mkstemp(prefix="interview_question_", suffix=".mp3")
+    os.close(descriptor)
+    gTTS(text=text_input, lang="en").save(audio_file_path)
     return audio_file_path
 
-# Function to convert the audio file to text
+
 def transcribe_audio_faster_whisper(
-    audio_file_path: str, 
-    model_size: str = "base", 
+    audio_file_path: str | None,
+    model_size: str = "base",
     device: str = "auto",
-    compute_type: str = "auto"
+    compute_type: str = "auto",
 ) -> str:
-    # ... (function body remains the same as previously defined)
-    
+    """Preserve Faster Whisper microphone transcription behavior."""
+
     if audio_file_path is None:
-        return "Please provide an audio input."
-        
+        return ""
     if compute_type == "auto":
         compute_type = "float16" if device == "cuda" else "int8"
-        
     device = "cpu"
-        
     try:
         model = WhisperModel(model_size, device=device, compute_type=compute_type)
-        segments, info = model.transcribe(audio_file_path, beam_size=5)
-        full_transcript = [segment.text for segment in segments]
+        segments, _ = model.transcribe(audio_file_path, beam_size=5)
+        return "".join(segment.text for segment in segments).strip()
+    except Exception as error:
+        return f"❌ An error occurred during transcription: {error}"
 
-        return "".join(full_transcript).strip()
 
-    except Exception as e:
-        return f"❌ An error occurred during transcription: {e}"
+def _format_report(report: object) -> str:
+    return report.model_dump_json(indent=2)
 
-def next_question(resume_path, job_str, total_number, question_previous="", answer_previous=""):
-    # Refer to the global variables defined at the front
-    global chat_histories, interview_step, resume_summary, job_summary
-    
-    # Generate resume_summary if it hasn't been done
-    if resume_summary is None:
-        resume_summary = extract_text_from_pdf(resume_path)
-        
-    # Generate job_summary if it hasn't been done
-    if job_summary is None:
-        job_summary = Job_Description_Expert(job_str)
-    
-    # Converts the user’s last voice answer into text using the Whisper speech recognition model
-    try:
-        answer_previous = transcribe_audio_faster_whisper(answer_previous)
-    except:
-        answer_previous = ""
-    
-    # Update the interview history after the interview starts. 
-    # The chat history is formatted as a dictionary with keys of interview questions 
-    # and their values of interviewee's answers.
-    if interview_step > 0:
-        chat_histories[f"Q{interview_step+1}: {question_previous}"] = answer_previous
-    
-    # If it’s the first question, it defaults to “Tell me about yourself.”
-    # Otherwise, the Interview Question Action Agent decides whether to:
-    # Ask about another resume topic, or Ask a deeper follow-up question.
-    # The Interviewer Agent then formulates the next question naturally.
-    if interview_step < total_number:
-        if interview_step == 0:
-            action = None
-        else:
-            chat_hist_str = str(chat_histories)
-            action = Interview_Question_Action(chat_hist_str, resume_summary, job_summary)
-        
-        Question_next = Interviewer(resume_summary, job_summary, action, last=False)
-    else:
-        Question_next = Interviewer(resume_summary, job_summary, action=None, last=True)
-    
-    # If the interview ends, the evaluator will evaluate interviewee's performance.
-    if interview_step >= total_number:
-        evaluation = Evaluator(str(chat_histories), job_summary)
-        chat_histories = {}
-        interview_step = 0
-        resume_summary = None
-        job_summary = None
-    else:
-        evaluation = "Evaluation Ongoing ......"
-    
-    # Convert the next interview question to the audio.
-    question_audio_path = text_to_speech_file(Question_next)
-    interview_step += 1
 
-    return gr.update(value=question_audio_path), gr.update(value=None), gr.update(value="Submit!"), gr.update(value=evaluation)
+def start_interview(
+    resume_path: str | object,
+    job_description: str,
+    total_number: int,
+) -> tuple[str, str | None, None, str, str, InterviewApplicationSession | None]:
+    """Build profiles/matches and start one new engine-backed Gradio session."""
 
-# gradio ui
+    update = start_application_interview(
+        resume_path,
+        job_description,
+        total_number,
+        extract_pdf=extract_text_from_pdf,
+        build_candidate=build_candidate_profile,
+        build_role=build_role_profile,
+        create_session=create_interview_session,
+        text_to_speech=text_to_speech_file,
+    )
+    return update.question_text, update.question_audio_path, None, update.status, update.submit_label, update.session
+
+
+def submit_answer(
+    session: InterviewApplicationSession | None,
+    answer_audio_path: str | None,
+) -> tuple[str, str | None, None, str, str, InterviewApplicationSession | None]:
+    """Transcribe one answer and advance only through the session-local engine."""
+
+    update = submit_application_answer(
+        session,
+        answer_audio_path,
+        transcribe=transcribe_audio_faster_whisper,
+        text_to_speech=text_to_speech_file,
+        format_report=_format_report,
+    )
+    return update.question_text, update.question_audio_path, None, update.status, update.submit_label, update.session
+
+
+def end_interview(
+    session: InterviewApplicationSession | None,
+) -> tuple[str, str | None, None, str, str, InterviewApplicationSession | None]:
+    update = end_application_interview(session, format_report=_format_report)
+    return update.question_text, update.question_audio_path, None, update.status, update.submit_label, update.session
+
+
 with gr.Blocks() as demo:
     gr.Markdown("# Personalized Interview Coach")
-    gr.Markdown('## Upload your pdf resume/CV and copy paste the job description you are applying to:')
-    
-    # The first row contains two main inputs side-by-side: resume_input and job_desc_input.
+    gr.Markdown("## Upload your PDF resume/CV and paste the job description.")
+    session_state = gr.State(value=None)
     with gr.Row():
-        resume_input = gr.File(label="Upload Resume (PDF)",type='filepath')
+        resume_input = gr.File(label="Upload Resume (PDF)", type="filepath")
         job_desc_input = gr.Textbox(label="Job Description", lines=15)
-        
-    # Input for the length of the interview
-    gr.Markdown('## Decide the length of your mock interview (from 1 question to 10 questions):')
     num_q_input = gr.Slider(label="Number of Questions", minimum=1, maximum=10, value=5, step=1)
-    
-    # Define the window for interviewer question audio
-    gr.Markdown('## Click "Start Interview" below to start the Mock Interview!')
-    interviewer_question = gr.Audio(label="Interviewer Question", type="filepath")
-    
-    # Define the window for interviewee's audio input
-    user_answer = gr.Audio(
-            sources=["microphone"], # Only allows microphone input
-            type="filepath",        # Returns the path to the temporary recorded file
-            label="Your turn! Record Your Answer."
-        )
-        
-    # Define the start interview button
     start_btn = gr.Button("Start Interview", scale=2, min_width=200)
-    
-    # Define the evaluation textbox that shows the final feedback
-    gr.Markdown("## Evaluating your performance along the way ...")
-    evaluation_textbox = gr.Textbox(label="Performance Evaluation",lines=20)
-    
-    # Integrate the next_question() function with the start button
+    interviewer_question_text = gr.Textbox(label="Interviewer Question", lines=4, interactive=False)
+    interviewer_question_audio = gr.Audio(label="Interviewer Question Audio", type="filepath")
+    user_answer = gr.Audio(sources=["microphone"], type="filepath", label="Your turn! Record Your Answer.")
+    submit_btn = gr.Button("Submit Answer", scale=2, min_width=200)
+    end_btn = gr.Button("End Interview Early")
+    evaluation_textbox = gr.Textbox(label="Interview Status / Final Report", lines=20)
+
     start_btn.click(
-        fn=next_question,
-        inputs=[resume_input, job_desc_input, num_q_input, interviewer_question, user_answer],
-        outputs=[interviewer_question, user_answer, start_btn, evaluation_textbox]
+        fn=start_interview,
+        inputs=[resume_input, job_desc_input, num_q_input],
+        outputs=[interviewer_question_text, interviewer_question_audio, user_answer, evaluation_textbox, submit_btn, session_state],
+    )
+    submit_btn.click(
+        fn=submit_answer,
+        inputs=[session_state, user_answer],
+        outputs=[interviewer_question_text, interviewer_question_audio, user_answer, evaluation_textbox, submit_btn, session_state],
+    )
+    end_btn.click(
+        fn=end_interview,
+        inputs=[session_state],
+        outputs=[interviewer_question_text, interviewer_question_audio, user_answer, evaluation_textbox, submit_btn, session_state],
     )
 
-# Launch the app
+
 if __name__ == "__main__":
     demo.launch(share=True)

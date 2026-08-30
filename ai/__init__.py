@@ -7,10 +7,12 @@ application supplies its already-initialised watsonx.ai model through
 
 from .llm_client import configure_structured_client
 from .answer_assessor import AnswerAssessor
+from .interview_engine import InterviewEngine
 from .interview_planner import InterviewPlanner
 from .profile_builder import build_candidate_profile, build_role_profile
 from .question_generator import QuestionGenerator
-from .schemas import AnswerAssessment, CandidateProfile, InterviewPlanState, InterviewQuestion, QuestionPlan, RoleProfile, SkillMatchReport
+from .report_builder import FinalReportBuilder
+from .schemas import AnswerAssessment, CandidateProfile, FinalInterviewReport, InterviewPlanState, InterviewQuestion, InterviewSessionState, QuestionPlan, RoleProfile, SkillMatchReport
 from .skill_matcher import SkillMatcher
 
 __all__ = [
@@ -18,12 +20,16 @@ __all__ = [
     "RoleProfile",
     "AnswerAssessment",
     "AnswerAssessor",
+    "InterviewEngine",
+    "FinalReportBuilder",
+    "FinalInterviewReport",
     "SkillMatchReport",
     "SkillMatcher",
     "InterviewPlanner",
     "InterviewPlanState",
     "QuestionPlan",
     "InterviewQuestion",
+    "InterviewSessionState",
     "QuestionGenerator",
     "build_candidate_profile",
     "build_role_profile",
